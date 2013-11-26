@@ -14,10 +14,11 @@ function add_printer(printer){
   div.append("<div class=\"row\">"+
       "<div class=\"col-md-3\"> "+
          "<div id=\"status-"+printer.id+"\" style=\"width:250px; height:160px\"></div>"+
+         "<div id=\"temp-bar-"+printer.id+"\"></div>"+
       "</div><div class=\"col-md-9\"> "+
            "<table class=\"table table-striped\"> "+
               "<thead><tr><th>#</th>"+
-              "<th>Filename</th><th>Status</th><th>Start</th> <th>End</th> </tr></thead>"+
+              "<th>Filename</th><th>Status</th><th>Percent</th></tr></thead>"+
               "<tbody class=\"job_list\"></tbody>"+
            "</table></div></div>"+
       "</div><hr />");
@@ -30,18 +31,24 @@ function add_printer(printer){
     min: 0,    max: 100, label:"%",
     title: printer.printer_name+" Status"
     });
+  // Keep references: (can use pg[i].refresh(value) to update)
   printer.gage=g;
 
+  $( "#temp-bar-"+printer.id ).attr("class","ui-progressbar");
+  $("#temp-bar-"+printer.id).append($("<div>")).attr("class","progress-label");
+  $("#temp-bar-"+printer.id+" .progress-label").html("Testing.");
+  $( "#temp-bar-"+printer.id ).progressbar({value: 0,max: 255});
+
   // Populate into table:
-  redraw_jobs(printer.job_list,printer.id);
+  redraw_jobs(printer.job_list,printer);
 } // End add_printer
 
 
 
 
 // Creates / updates job table:
-function redraw_jobs(job_list, printer_name){
- var tbody = $("#"+printer_name+' tbody');
+function redraw_jobs(job_list, printer){
+ var tbody = $("#"+printer.id+' tbody');
  tbody.empty(); // Empty existing table.
 
  // Add jobs to table:
@@ -54,9 +61,15 @@ function redraw_jobs(job_list, printer_name){
       tr.append($('<td>').html(job.id));
       tr.append($('<td>').html(job.file_name));
       tr.append($('<td>').html(job.status));
-      tr.append($('<td>').html("&nbsp")); // TBD
-      tr.append($('<td>').html("&nbsp")); // TBD
-
+      if (job.current_line !== undefined && job.total_lines !== undefined)
+      {
+        percent = (job.current_line * 100) / job.total_lines;
+        tr.append($('<td>').html(parseInt(percent))); 
+      }
+      else
+      {
+        tr.append($('<td>').html("&nbsp"));
+      }
       if (job.status=="printing")
         tr.attr("class","table_active_job");
 
@@ -64,9 +77,9 @@ function redraw_jobs(job_list, printer_name){
   });
 
   // Pad list length:
-  while ($("#"+printer_name+" tr").length < 4)
+  while ($("#"+printer.id+" tr").length < 4)
   {
-    tr = $("<tr>").append($("<td>").html("&nbsp"));
+    tr = $("<tr>");
     tr.append($("<td>").html("&nbsp"));
     tr.append($("<td>").html("&nbsp"));
     tr.append($("<td>").html("&nbsp"));
@@ -81,7 +94,10 @@ function redraw_jobs(job_list, printer_name){
 function refresh_print_display(printer, job){
   percent = (printer.job_list[job].current_line * 100) / printer.job_list[job].total_lines;
   printer.gage.refresh(parseInt(percent));
+  // Status is in table too now.
+  redraw_jobs(printer.job_list, printer);
 }
+
 
 
 
@@ -92,11 +108,13 @@ var socket = new WebSocket("ws://"+printer.ip+":2540/printers/"+printer.id+"/soc
     {
       $(".container #"+printer.id).remove();
       console.log("Connection lost, Printer removed.");
+      printer.connected = false;
     }
     socket.onopen = function()
     {
       add_printer(printer);
       console.log ("WebSocket Opened.");
+      printer.connected=true;
     }  
     socket.onmessage = function(msg){  
         /* ALL THE DEBUG:
@@ -108,8 +126,7 @@ var socket = new WebSocket("ws://"+printer.ip+":2540/printers/"+printer.id+"/soc
           console.log(jQuery.parseJSON(msg.data));
         }
         */
-        //if (msg.data.indexOf("job")>=0) console.log(msg.data);
-
+        //if (msg.data.indexOf("temp")<0) console.log(msg.data);
         $.each(jQuery.parseJSON(msg.data), function(i,item)
         {
 
@@ -126,10 +143,20 @@ var socket = new WebSocket("ws://"+printer.ip+":2540/printers/"+printer.id+"/soc
               refresh_print_display(printer,item.target);
             // Redraw table:
             if (item.type == "rm" || (Object.keys(item.data).filter(function(k){ return (k!="current_line"); }).length >0))
-              redraw_jobs(printer.job_list,printer.id);
+              redraw_jobs(printer.job_list,printer);
           }
-           
+
+          // Temp Gague
+          if (msg.data.indexOf("current_temp")>=0)
+            if (item.data && item.data.current_temp)
+            {
+              $(function() {
+                $( "#temp-bar-"+printer.id ).progressbar({value: item.data.current_temp });
+              });
+            }
+ 
           // Initialization: (first jobs, states)
+
           if (item.type == "initialized")
           {  
             if (item.data.status !== undefined)
@@ -142,7 +169,7 @@ var socket = new WebSocket("ws://"+printer.ip+":2540/printers/"+printer.id+"/soc
             {
               printer.job_list["jobs["+job.id+"]"]=job;
             });
-            redraw_jobs(printer.job_list,printer.id);
+            redraw_jobs(printer.job_list,printer);
           }
 
           // Printer status:
@@ -155,17 +182,27 @@ var socket = new WebSocket("ws://"+printer.ip+":2540/printers/"+printer.id+"/soc
     }  
 }
 
+// Quick hack to fix dropped connections: (once/minute reconnect attemped)
+function lazy_reconnect(){
+  $.each(printer_list,function(i,printer){
+    if (! printer.connected)
+    {
+      connect(printer);
+    }
+  });
+}
 
+setInterval(lazy_reconnect,60000);
 
 // Example usage:
 printer_list=[
-  {"id":"ultimaker_1","printer_name":"Ultimaker","ip":"ultimaker2","job_list":{}},
-  {"id":"ultimaker_2_the_reckoning","printer_name":"Ultimaker 2","ip":"ultimaker","job_list":{}},
-  {"id":"breakerbot","printer_name":"BreakerBot","ip":"cupcake","job_list":{}},
-  {"id":"null","printer_name":"BreakerBot","ip":"127.0.0.1","job_list":{}},
+  {"id":"ultimaker_1","printer_name":"Ultimaker","ip":"ultimaker2","job_list":{},"connected":false},
+  {"id":"ultimaker_2_the_reckoning","printer_name":"Ultimaker 2","ip":"ultimaker","job_list":{},"connected":false},
+  {"id":"breakerbot","printer_name":"BreakerBot","ip":"cupcake","job_list":{},"connected":false},
+  {"id":"null","printer_name":"Null_1","ip":"127.0.0.1","job_list":{},"connected":false},
   ];
-//connect(printer_list[0]);
-//connect(printer_list[1]);
+connect(printer_list[0]);
+connect(printer_list[1]);
+connect(printer_list[2]);
 connect(printer_list[3]);
-// This data should eventually come from mDNS libraries or through proxy application via ajax calls.
 

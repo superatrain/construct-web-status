@@ -100,30 +100,20 @@ function refresh_print_display(printer, job){
 
 
 function connect (printer){
-var socket = new WebSocket("ws://"+printer.ip+":2540/printers/"+printer.id+"/socket?user=admin&password=admin");
+var socket = new WebSocket("ws://"+printer.hostname+":2540/printers/"+printer.id+"/socket?user=admin&password=admin");
     socket.onclose = function()
     {
       $(".container #"+printer.id).remove();
-      console.log("Connection lost, Printer removed.");
+      //console.log("Connection lost, Printer removed.");
       printer.connected = false;
     }
     socket.onopen = function()
     {
       add_printer(printer);
-      console.log ("WebSocket Opened.");
+      //console.log ("WebSocket Opened.");
       printer.connected=true;
     }  
     socket.onmessage = function(msg){  
-        /* ALL THE DEBUG:
-        if (msg.data.indexOf("e0")<0)
-          console.log("DBG1-"+msg.data);
-        if (msg.data.indexOf("init")>=0)
-        {
-          console.log("DBG1:");
-          console.log(jQuery.parseJSON(msg.data));
-        }
-        */
-        //if (msg.data.indexOf("temp")<0) console.log(msg.data);
         $.each(jQuery.parseJSON(msg.data), function(i,item)
         {
 
@@ -183,8 +173,8 @@ var socket = new WebSocket("ws://"+printer.ip+":2540/printers/"+printer.id+"/soc
     }  
 }
 
-// Quick hack to fix dropped connections: (once/minute reconnect attemped)
-function lazy_reconnect(){
+// Attempt to connect to each printer.
+function connect_all(){
   $.each(printer_list,function(i,printer){
     if (! printer.connected)
     {
@@ -192,18 +182,8 @@ function lazy_reconnect(){
     }
   });
 }
+// Lazy Reconnect: (once/minute)
+setInterval(connect_all,60000);
 
-setInterval(lazy_reconnect,60000);
-
-// Example usage:
-printer_list=[
-  {"id":"ultimaker_1","printer_name":"Ultimaker","ip":"ultimaker2","job_list":{},"connected":false},
-  {"id":"ultimaker_2_the_reckoning","printer_name":"Ultimaker 2","ip":"ultimaker","job_list":{},"connected":false},
-  {"id":"breakerbot","printer_name":"BreakerBot","ip":"cupcake","job_list":{},"connected":false},
-  {"id":"null","printer_name":"Null_1","ip":"127.0.0.1","job_list":{},"connected":false},
-  ];
-connect(printer_list[0]);
-connect(printer_list[1]);
-connect(printer_list[2]);
-connect(printer_list[3]);
-
+// Initial connection:
+connect_all();

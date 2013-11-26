@@ -14,7 +14,9 @@ function add_printer(printer){
   div.append("<div class=\"row\">"+
       "<div class=\"col-md-3\"> "+
          "<div id=\"status-"+printer.id+"\" style=\"width:250px; height:160px\"></div>"+
-         "<div id=\"temp-bar-"+printer.id+"\"></div>"+
+         "<div class=\"progress\"><div class=\"progress-bar\" role=\"progressbar\" aria-valuenow=\"0\" aria-valuemin=\"0\" aria-valuemax=\"255\" style=\"width: 0%;\" id=\"temp-bar-"+printer.id+"\">"+
+           "<span class=\"sr-only\" id=\"temp-"+printer.id+"\"></span>"+
+         "</div></div>"+
       "</div><div class=\"col-md-9\"> "+
            "<table class=\"table table-striped\"> "+
               "<thead><tr><th>#</th>"+
@@ -33,11 +35,6 @@ function add_printer(printer){
     });
   // Keep references: (can use pg[i].refresh(value) to update)
   printer.gage=g;
-
-  $( "#temp-bar-"+printer.id ).attr("class","ui-progressbar");
-  $("#temp-bar-"+printer.id).append($("<div>")).attr("class","progress-label");
-  $("#temp-bar-"+printer.id+" .progress-label").html("Testing.");
-  $( "#temp-bar-"+printer.id ).progressbar({value: 0,max: 255});
 
   // Populate into table:
   redraw_jobs(printer.job_list,printer);
@@ -148,11 +145,15 @@ var socket = new WebSocket("ws://"+printer.ip+":2540/printers/"+printer.id+"/soc
 
           // Temp Gague
           if (msg.data.indexOf("current_temp")>=0)
-            if (item.data && item.data.current_temp)
+            if (item.data && item.target && item.data.current_temp && item.target.substring(0,1) == "e")
             {
-              $(function() {
-                $( "#temp-bar-"+printer.id ).progressbar({value: item.data.current_temp });
-              });
+              temp = item.data.current_temp;
+              bar = $( "#temp-bar-"+printer.id );
+              bar.attr("style","width: "+temp*100/255+"%");
+              // Coloring:
+              if (temp < 60) bar.removeClass("progress-bar-warning progress-bar-danger").addClass("progress-bar-success");
+              else if (temp < 150 ) bar.removeClass("progress-bar-success progress-bar-danger").addClass("progress-bar-warning");
+              else bar.removeClass("progress-bar-success progress-bar-warning").addClass("progress-bar-danger");
             }
  
           // Initialization: (first jobs, states)

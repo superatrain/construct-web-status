@@ -35,6 +35,8 @@ function add_printer(printer){
     });
   // Keep references: (can use pg[i].refresh(value) to update)
   printer.gage=g;
+  
+  printer.job_list={};
 
   // Populate into table:
   redraw_jobs(printer.job_list,printer);
@@ -176,7 +178,7 @@ var socket = new WebSocket("ws://"+printer.hostname+":2540/printers/"+printer.id
 // Attempt to connect to each printer.
 function connect_all(){
   $.each(printer_list,function(i,printer){
-    if (! printer.connected)
+    if ( ! printer.connected || ! printer.connected )
     {
       connect(printer);
     }

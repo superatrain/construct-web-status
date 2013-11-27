@@ -17,7 +17,7 @@ printer_list=[
     "hostname":"cupcake",
   },
   {
-    "id":"type_a",
+    "id":"type_a_series_1",
     "printer_name":"Type A",
     "hostname":"192.168.111.79",
   },

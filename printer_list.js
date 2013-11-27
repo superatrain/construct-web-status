@@ -15,6 +15,7 @@ printer_list=[
     "id":"breakerbot",
     "printer_name":"BreakerBot",
     "hostname":"cupcake",
+  },
   {
     "id":"type_a",
     "printer_name":"Type A",

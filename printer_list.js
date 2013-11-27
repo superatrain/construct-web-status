@@ -20,6 +20,5 @@ printer_list=[
     "printer_name":"Type A",
     "hostname":"192.168.111.79",
   },
-  },
   ];
 
